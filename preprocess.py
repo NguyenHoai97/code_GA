@@ -7,65 +7,104 @@ import numpy as np
 from nltk.stem import PorterStemmer
 import math
 
+def word_frequencies(list_sentences, title):
+    list_sentences_frequency = {}
+    tmp_dict = {'word_frequencies':'', 'value_word_in_sent':''}
+    # Each sentence
+    for index, sentence in enumerate(list_sentences):
+        sentence = list_sentences_to_string(sentence)
+        word_frequencies = {}
+        for word in nltk.word_tokenize(sentence):
+            if word not in word_frequencies.keys():
+                word_frequencies[word] = 1
+            else:
+                word_frequencies[word] += 1
+        list_sentences_frequency[index] = word_frequencies
+    
+        word_in_sent = {}
+        value_word_in_sent = {}
+        n = len(list_sentences)
+        for word in word_frequencies.keys():
+            word_in_sent[word] = 0
+            for sentence in list_sentences:
+                if word in nltk.word_tokenize(sentence):
+                    word_in_sent[word] += 1
+            value_word_in_sent[word] = math.log(n/(1+word_in_sent[word]))
 
-
-def list_sentences_to_string(list_sentences):
-    return " ".join(list_sentences)
-
-
-def weight(article, list_sentences, word_in_sents,  return_voca=False):
-    article_text = list_sentences_to_string(list_sentences)
-
-    # word_in_sents = word_appear_sent(article)
-
-
+        tmp_dict['word_frequencies'] = word_frequencies
+        tmp_dict['value_word_in_sent'] = value_word_in_sent
+        list_sentences_frequency[index] = tmp_dict
+    
+    # All sentences
+    list_sentences_string = list_sentences_to_string(list_sentences)
     word_frequencies = {}
-    for word in nltk.word_tokenize(article_text):
+    for word in nltk.word_tokenize(list_sentences_string):
         if word not in word_frequencies.keys():
             word_frequencies[word] = 1
         else:
             word_frequencies[word] += 1
-    if return_voca:
-        voca = list(word_frequencies)
-    else:
-        voca = None
-    if len(word_frequencies) == 0:
-        maximum_prequency = 0
-    else:
-        maximum_prequency = max(word_frequencies.values())
-
+    
+    word_in_sent = {}
+    value_word_in_sent = {}
+    n = len(list_sentences)
     for word in word_frequencies.keys():
-        if maximum_prequency == 0:
-            word_frequencies[word] = 0
-        else:
-            word_frequencies[word] = (word_frequencies[word]/maximum_prequency)*word_in_sents[word]
-    return word_frequencies, voca
+        word_in_sent[word] = 0
+        for sentence in list_sentences:
+            if word in nltk.word_tokenize(sentence):
+                word_in_sent[word] += 1
+        value_word_in_sent[word] = math.log(n/(1+word_in_sent[word]))
 
+    tmp_dict['word_frequencies'] = word_frequencies
+    tmp_dict['value_word_in_sent'] = value_word_in_sent
+    list_sentences_frequency['list_sentences'] = tmp_dict
 
-
-def word_appear_sent(article):
-    article_text = list_sentences_to_string(article)
-
+    # Title
+    title = list_sentences_to_string(title)
     word_frequencies = {}
-    for word in nltk.word_tokenize(article_text):
+    for word in nltk.word_tokenize(title):
         if word not in word_frequencies.keys():
             word_frequencies[word] = 1
         else:
             word_frequencies[word] += 1
 
     word_in_sent = {}
+    value_word_in_sent = {}
+    n = len(list_sentences)
     for word in word_frequencies.keys():
         word_in_sent[word] = 0
-        for sentence in article:
+        for sentence in list_sentences:
             if word in nltk.word_tokenize(sentence):
                 word_in_sent[word] += 1
-    value_for_word_in_sent = {}
-    n = len(article)
+        value_word_in_sent[word] = math.log(n/(1+word_in_sent[word]))
+
+    tmp_dict['word_frequencies'] = word_frequencies
+    tmp_dict['value_word_in_sent'] = value_word_in_sent
+    list_sentences_frequency['title'] = tmp_dict
+    return list_sentences_frequency
+
+
+def list_sentences_to_string(list_sentences):
+    return " ".join(list_sentences)
+
+
+def return_vocab(list_sentences_frequency, key='list_sentences'):
+    return list(list_sentences_frequency[key]['word_frequencies'])
+
+
+def weight(list_sentences_frequency, key):
+    word_frequencies = list_sentences_frequency[key]['word_frequencies']
+    value_word_in_sents = list_sentences_frequency[key]['value_word_in_sent']
+    if len(word_frequencies) == 0:
+        maximum_frequency = 0
+    else:
+        maximum_frequency = max(word_frequencies.values())
+
     for word in word_frequencies.keys():
-        value_for_word_in_sent[word] = math.log(n/(1+word_in_sent[word]))
-    return value_for_word_in_sent
-
-
+        if maximum_frequency == 0:
+            word_frequencies[word] = 0
+        else:
+            word_frequencies[word] = (word_frequencies[word]/maximum_frequency)*value_word_in_sents[word]
+    return word_frequencies
 
 
 def normalize(vec):
@@ -86,41 +125,43 @@ def get_vec_weight(S, voca): #S là dict của 1 câu, cần chuyển kích thư
         except:
             continue
     return vec
-def sim_2_sent(sentences):    
-    word_in_sents = word_appear_sent(sentences)
-    d_dict, voca = weight(sentences, sentences,  word_in_sents, return_voca=True)
+
+
+def sim_2_sent(list_sentences_frequency):    
+    voca = return_vocab(list_sentences_frequency)
     sim2sents = []
-    for i in range(len(sentences)):
+    for i in range(len(list_sentences_frequency)-2):
         sim2sents.append([])
-        for j in range(len(sentences)):
-            sent1_dict, _ = weight(sentences, [sentences[i]], word_in_sents)
+        for j in range(len(list_sentences_frequency)-2):
+            sent1_dict = weight(list_sentences_frequency, key=i)
             sent1_vec = get_vec_weight(sent1_dict, voca)
-            sent2_dict, _ = weight(sentences, [sentences[j]], word_in_sents )
+            sent2_dict = weight(list_sentences_frequency, key=j)
             sent2_vec = get_vec_weight(sent2_dict, voca)
             sim2sents[i].append(simCos(sent1_vec, sent2_vec))
     return sim2sents
 
-def sim_with_title(sentences, title):
-    word_in_sents = word_appear_sent(sentences)
-    d_dict, voca = weight(sentences, sentences,word_in_sents, return_voca=True)
-    title_dict, _ = weight(sentences, [title], word_in_sents)
+
+def sim_with_title(list_sentences_frequency):
+    voca = return_vocab(list_sentences_frequency)
+    title_dict = weight(list_sentences_frequency, key='title')
     title_vec = get_vec_weight(title_dict, voca)
     simWithTitle = []
-    for sent in sentences:
-        s_i_dict, _ = weight(sentences, [sent], word_in_sents)
+    # duyet tung sentence
+    for i in range(len(list_sentences_frequency)-2):
+        s_i_dict = weight(list_sentences_frequency, key=i)
         s_i = get_vec_weight(s_i_dict, voca)
         simT = simCos(s_i, title_vec)
         simWithTitle.append(simT)
     return simWithTitle
 
-def sim_with_doc(sentence, sentences):
-    word_in_sents = word_appear_sent(sentences)
-    d_dict, voca = weight(sentences, sentences,word_in_sents, return_voca=True)
+
+def sim_with_doc(list_sentences_frequency, index_sentence):
+    voca = return_vocab(list_sentences_frequency)
+    d_dict = weight(list_sentences_frequency, key='list_sentences')
     document_ = get_vec_weight(d_dict, voca)
-    sentence_dict, _ = weight(sentences, [sentence], word_in_sents)
+    sentence_dict = weight(list_sentences_frequency, index_sentence)
     sentence_ = get_vec_weight(sentence_dict, voca)
     return simCos(sentence_, document_)
-
 
 
 def count_noun(sentences): #đếm số danh từ 
@@ -139,7 +180,7 @@ def count_noun(sentences): #đếm số danh từ
     return number_of_nouns
 
 
-def preprocess_raw_sent(raw_sent):
+def preprocess_raw_sent(raw_sent, tmp=False):
     words = nltk.word_tokenize(raw_sent)
     preprocess_words = ""
     stopwords = nltk.corpus.stopwords.words('english')
@@ -147,25 +188,12 @@ def preprocess_raw_sent(raw_sent):
     for word in words:
         if word.isalpha():
             if word not in stopwords:
-                word = word.lower()
-                # word = stemmer.stem(word)
-                word = " " + word
-                preprocess_words += word
+                if tmp==False:
+                    word = word.lower()
+                preprocess_words += " " + word
     preprocess_words = preprocess_words.strip()
     return preprocess_words
 
-def preprocess_numberOfNNP(raw_sent):
-    words = nltk.word_tokenize(raw_sent)
-    preprocess_words = ""
-    stopwords = nltk.corpus.stopwords.words('english')
-    # stemmer= PorterStemmer()
-    for word in words:
-        if word.isalpha():
-            if word not in stopwords:
-                word = " " + word
-                preprocess_words += word
-    preprocess_words = preprocess_words.strip()
-    return preprocess_words
 
 def preprocess_for_article(raw_sent):
     words = nltk.word_tokenize(raw_sent)
@@ -177,7 +205,7 @@ def preprocess_for_article(raw_sent):
             # if word not in stopwords:
                 # word = word.lower()
                 # word = stemmer.stem(word)
-                word = " " + word
-                preprocess_words += word
+                # word =  + word" "
+        preprocess_words += " " + word
     preprocess_words = preprocess_words.strip()
     return preprocess_words
